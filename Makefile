@@ -7,13 +7,38 @@ BUNDLE_NAME=Kani
 CWD := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
 
+# Source Dependencies ##########################################################
+
+
+# Source/main.mm: Source/AppDelegate.hh
+
+# Source/AppDelegate.mm: Source/AppDelegate.hh Source/KaniToolbarDelegate.hh Source/KaniMainView.hh
+
+# Source/KaniMainView.mm: Source/KaniMainView.hh
+
+# Source/KaniMainToolbarDelegate.mm: Source/KaniMainToolbarDelegate.hh
+
+
+# Object Files #################################################################
+
+
+MAIN_OBJECTS = \
+	Make/Object/main.o \
+	Make/Object/AppDelegate.o \
+	Make/Object/KaniMainView.o \
+	Make/Object/KaniMainToolbarDelegate.o
+
+Make/Object/%.o: Source/%.mm
+	@mkdir -p "Make/Object"
+	@clang++ -std=c++11 -Wall -o $@ -c $<
+
+
 # Executables ##################################################################
 
 
-# clang++ -std=c++11 -Wall -framework Foundation -framework AppKit main.mm -o Make/Kani
-Make/${BUNDLE_NAME}: Source/main.mm
+Make/${BUNDLE_NAME}: ${MAIN_OBJECTS}
 	@mkdir -p "Make"
-	@clang++ -std=c++11 -Wall -framework Cocoa "Source/main.mm" -o "Make/${BUNDLE_NAME}"
+	@clang++ -std=c++11 -Wall -framework Cocoa -lobjc -o "Make/${BUNDLE_NAME}" $^
 
 
 # Resources ####################################################################
@@ -49,6 +74,6 @@ Make/${BUNDLE_NAME}.app: Make/${BUNDLE_NAME} Make/Resources/${BUNDLE_NAME}.icns 
 all: Make/${BUNDLE_NAME}.app
 
 clean:
-	rm -rf Make
+	@rm -rf "Make"
 
 .PHONY: all clean
