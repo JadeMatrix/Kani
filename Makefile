@@ -11,9 +11,9 @@ CWD := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
 
 # clang++ -std=c++11 -Wall -framework Foundation -framework AppKit main.mm -o Make/Kani
-Make/${BUNDLE_NAME}: main.mm
+Make/${BUNDLE_NAME}: Source/main.mm
 	@mkdir -p "Make"
-	@clang++ -std=c++11 -Wall -framework Cocoa "main.mm" -o "Make/${BUNDLE_NAME}"
+	@clang++ -std=c++11 -Wall -framework Cocoa "Source/main.mm" -o "Make/${BUNDLE_NAME}"
 
 
 # Resources ####################################################################
