@@ -33,7 +33,7 @@ Make/Resources/${BUNDLE_NAME}.icns: Make/Resources/${BUNDLE_NAME}.iconset/icon_5
 
 Make/Info.plist: Resources/Info.plist
 	@mkdir -p "Make"
-	sed 's/AUTHOR_NAME/${AUTHOR_NAME}/' "Resources/Info.plist" | sed 's/BUNDLE_NAME/${BUNDLE_NAME}/' > "Make/Info.plist"
+	@sed 's/AUTHOR_NAME/${AUTHOR_NAME}/' "Resources/Info.plist" | sed 's/BUNDLE_NAME/${BUNDLE_NAME}/' > "Make/Info.plist"
 
 Make/${BUNDLE_NAME}.app: Make/${BUNDLE_NAME} Make/Resources/${BUNDLE_NAME}.icns Make/Info.plist
 	@mkdir -p "Make/${BUNDLE_NAME}.app/Contents/MacOS"
