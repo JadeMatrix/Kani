@@ -55,82 +55,20 @@ FIND_PROGRAM(
 
 
 ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "Resources/${BUNDLE_NAME}.iconset/"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_16x16@1x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_16x16@1x.png" --export-dpi 96 --export-area=512:480:528:496 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_16x16@2x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_16x16@2x.png" --export-dpi 192 --export-area=512:480:528:496 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_32x32@1x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_32x32@1x.png" --export-dpi 96 --export-area=512:448:544:480 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_32x32@2x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_32x32@2x.png" --export-dpi 192 --export-area=512:448:544:480 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_128x128@1x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_128x128@1x.png" --export-dpi 96 --export-area=512:256:640:384 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_128x128@2x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_128x128@2x.png" --export-dpi 192 --export-area=512:256:640:384 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_256x256@1x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_256x256@1x.png" --export-dpi 96 --export-area=512:0:768:256 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_256x256@2x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_256x256@2x.png" --export-dpi 192 --export-area=512:0:768:256 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_512x512@1x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_512x512@1x.png" --export-dpi 96 --export-area=0:0:512:512 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
-    OUTPUT "Resources/${BUNDLE_NAME}.iconset/icon_512x512@2x.png"
-    COMMAND ${INKSCAPE_PROGRAM} --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_512x512@2x.png" --export-dpi 192 --export-area=0:0:512:512 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/Kani.svg"
-)
-ADD_CUSTOM_COMMAND(
     OUTPUT "Resources/${BUNDLE_NAME}.icns"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "Resources/${BUNDLE_NAME}.iconset/"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_16x16@1x.png" --export-dpi 96 --export-area=512:480:528:496 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_16x16@2x.png" --export-dpi 192 --export-area=512:480:528:496 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_32x32@1x.png" --export-dpi 96 --export-area=512:448:544:480 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_32x32@2x.png" --export-dpi 192 --export-area=512:448:544:480 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_128x128@1x.png" --export-dpi 96 --export-area=512:256:640:384 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_128x128@2x.png" --export-dpi 192 --export-area=512:256:640:384 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_256x256@1x.png" --export-dpi 96 --export-area=512:0:768:256 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_256x256@2x.png" --export-dpi 192 --export-area=512:0:768:256 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_512x512@1x.png" --export-dpi 96 --export-area=0:0:512:512 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
+    COMMAND ${INKSCAPE_PROGRAM} --without-gui --export-png="${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset/icon_512x512@2x.png" --export-dpi 192 --export-area=0:0:512:512 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/${BUNDLE_NAME}.svg"
     COMMAND ${ICONUTIL_PROGRAM} -c icns -o "${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.icns" "${CMAKE_CURRENT_BINARY_DIR}/Resources/${BUNDLE_NAME}.iconset"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_16x16@1x.png"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_16x16@2x.png"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_32x32@1x.png"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_32x32@2x.png"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_128x128@1x.png"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_128x128@2x.png"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_256x256@1x.png"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_256x256@2x.png"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_512x512@1x.png"
-    DEPENDS "Resources/${BUNDLE_NAME}.iconset/icon_512x512@2x.png"
+    DEPENDS "Resources/Kani.svg"
 )
 
 SET_SOURCE_FILES_PROPERTIES(
