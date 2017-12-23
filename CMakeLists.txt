@@ -40,6 +40,17 @@ TARGET_LINK_LIBRARIES( ${BUNDLE_NAME}
 )
 
 
+ADD_EXECUTABLE(
+    test_play_song
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/test_play_song.cpp"
+)
+TARGET_LINK_LIBRARIES(
+    test_play_song
+    "-framework AudioToolbox"
+    "-framework CoreServices"
+)
+
+
 FIND_PROGRAM(
     INKSCAPE_PROGRAM
     inkscape
