@@ -8,6 +8,8 @@
 #include <cstdlib>
 #include <string>
 
+#include "KaniErrors.hpp"
+
 
 namespace
 {
@@ -25,79 +27,6 @@ namespace
         AudioStreamPacketDescription *mPacketDescs;
         bool                         mIsRunning;
     };
-}
-
-
-void KaniTestMusicHandleErrorDebug( OSStatus e, int line )
-{
-    // https://developer.apple.com/documentation/audiotoolbox/audio_queue_services?language=objc
-    switch( e )
-    {
-    case kAudioQueueErr_InvalidBuffer:
-        std::cout << "InvalidBuffer on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_BufferEmpty:
-        std::cout << "BufferEmpty on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_DisposalPending:
-        std::cout << "DisposalPending on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_InvalidProperty:
-        std::cout << "InvalidProperty on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_InvalidPropertySize:
-        std::cout << "InvalidPropertySize on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_InvalidParameter:
-        std::cout << "InvalidParameter on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_CannotStart:
-        std::cout << "CannotStart on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_InvalidDevice:
-        std::cout << "InvalidDevice on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_BufferInQueue:
-        std::cout << "BufferInQueue on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_InvalidRunState:
-        std::cout << "InvalidRunState on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_InvalidQueueType:
-        std::cout << "InvalidQueueType on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_Permissions:
-        std::cout << "Permissions on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_InvalidPropertyValue:
-        std::cout << "InvalidPropertyValue on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_PrimeTimedOut:
-        std::cout << "PrimeTimedOut on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_CodecNotFound:
-        std::cout << "CodecNotFound on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_InvalidCodecAccess:
-        std::cout << "InvalidCodecAccess on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_QueueInvalidated:
-        std::cout << "QueueInvalidated on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_RecordUnderrun:
-        std::cout << "RecordUnderrun on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_EnqueueDuringReset:
-        std::cout << "EnqueueDuringReset on line " << std::to_string( line ) << std::endl;
-        break;
-    case kAudioQueueErr_InvalidOfflineMode:
-        std::cout << "InvalidOfflineMode on line " << std::to_string( line ) << std::endl;
-        break;
-    default:
-        return;
-    }
-    
-    std::exit( -1 );
 }
 
 
@@ -129,7 +58,7 @@ void KaniTestMusicPlayCallback(
         inBuffer -> mAudioData
     );
     
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
+    KaniHandleOSErrorDebug( result );
     
     if( numPackets > 0 )
     {
@@ -141,7 +70,7 @@ void KaniTestMusicPlayCallback(
             ( pAqData -> mPacketDescs ? numPackets : 0 ),
             pAqData -> mPacketDescs
         );
-        KaniTestMusicHandleErrorDebug( result, __LINE__ );
+        KaniHandleOSErrorDebug( result );
         
         pAqData -> mCurrentPacket += numPackets;
         
@@ -154,7 +83,7 @@ void KaniTestMusicPlayCallback(
     else
     {
         result = AudioQueueStop( pAqData -> mQueue, false );
-        KaniTestMusicHandleErrorDebug( result, __LINE__ );
+        KaniHandleOSErrorDebug( result );
         pAqData -> mIsRunning = false;
         
         std::cout
@@ -286,7 +215,7 @@ int main( int argc, char* argv[] )
         0,
         &aqData.mAudioFile
     );
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
+    KaniHandleOSErrorDebug( result );
      
     CFRelease( audioFileURL );
     
@@ -297,7 +226,7 @@ int main( int argc, char* argv[] )
         &dataFormatSize,
         &aqData.mDataFormat
     );
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
+    KaniHandleOSErrorDebug( result );
     
     std::cout
         << "loaded audio file"
@@ -314,7 +243,7 @@ int main( int argc, char* argv[] )
         &propertySize,
         &maxPacketSize
     );
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
+    KaniHandleOSErrorDebug( result );
     
     DeriveBufferSize(
         aqData.mDataFormat,
@@ -349,14 +278,14 @@ int main( int argc, char* argv[] )
     
     UInt32 cookieSize = sizeof( UInt32 );
     
-    bool couldNotGetProperty = AudioFileGetPropertyInfo(
+    result = AudioFileGetPropertyInfo(
         aqData.mAudioFile,
         kAudioFilePropertyMagicCookieData,
         &cookieSize,
         NULL
     );
      
-    if( !couldNotGetProperty && cookieSize )
+    if( result == noErr && cookieSize )
     {
         char* magicCookie = ( char* )malloc( cookieSize );
         
@@ -366,14 +295,20 @@ int main( int argc, char* argv[] )
             &cookieSize,
             magicCookie
         );
-        KaniTestMusicHandleErrorDebug( result, __LINE__ );
+        KaniHandleOSErrorDebug( result );
         result = AudioQueueSetProperty(
             aqData.mQueue,
             kAudioQueueProperty_MagicCookie,
             magicCookie,
             cookieSize
         );
-        KaniTestMusicHandleErrorDebug( result, __LINE__ );
+        if( result == paramErr )
+            std::cout
+                << "Could not set magic cookie on queue, playback may still succeed"
+                << std::endl
+            ;
+        else
+            KaniHandleOSErrorDebug( result );
         
         free( magicCookie );
     }
@@ -404,7 +339,7 @@ int main( int argc, char* argv[] )
         &aqData.mQueue
     );
     
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
+    KaniHandleOSErrorDebug( result );
     
     aqData.mCurrentPacket = 0;
     
@@ -423,14 +358,13 @@ int main( int argc, char* argv[] )
             aqData.bufferByteSize,
             &aqData.mBuffers[ i ]
         );
-        KaniTestMusicHandleErrorDebug( result, __LINE__ );
+        KaniHandleOSErrorDebug( result );
         
         KaniTestMusicPlayCallback(
             &aqData,
             aqData.mQueue,
             aqData.mBuffers[ i ]
         );
-        KaniTestMusicHandleErrorDebug( result, __LINE__ );
     }
     
     Float32 gain = 1.0; // Optionally, allow user to override gain setting here
@@ -440,7 +374,7 @@ int main( int argc, char* argv[] )
         kAudioQueueParam_Volume,
         gain
     );
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
+    KaniHandleOSErrorDebug( result );
     
     std::cout
         << "created queue & set parameters"
@@ -455,7 +389,7 @@ int main( int argc, char* argv[] )
         aqData.mQueue,
         NULL
     );
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
+    KaniHandleOSErrorDebug( result );
     
     std::cout
         << "running queue..."
@@ -463,20 +397,19 @@ int main( int argc, char* argv[] )
     ;
     
     do {
-        result = CFRunLoopRunInMode(
+        // returns https://developer.apple.com/documentation/corefoundation/cfrunlooprunresult?language=objc
+        CFRunLoopRunInMode(
             kCFRunLoopDefaultMode,
             0.25,
             false
         );
-        KaniTestMusicHandleErrorDebug( result, __LINE__ );
     } while( aqData.mIsRunning );
     
-    result = CFRunLoopRunInMode(
+    CFRunLoopRunInMode(
         kCFRunLoopDefaultMode,
         1,
         false
     );
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
     
     std::cout
         << "ran queue"
@@ -489,10 +422,10 @@ int main( int argc, char* argv[] )
         aqData.mQueue,
         true
     );
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
+    KaniHandleOSErrorDebug( result );
     
     result = AudioFileClose( aqData.mAudioFile );
-    KaniTestMusicHandleErrorDebug( result, __LINE__ );
+    KaniHandleOSErrorDebug( result );
     
     free( aqData.mPacketDescs );
     

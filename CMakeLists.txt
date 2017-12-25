@@ -43,11 +43,13 @@ TARGET_LINK_LIBRARIES( ${BUNDLE_NAME}
 ADD_EXECUTABLE(
     test_play_song
     "${CMAKE_CURRENT_SOURCE_DIR}/Source/test_play_song.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/KaniErrors.mm"
 )
 TARGET_LINK_LIBRARIES(
     test_play_song
     "-framework AudioToolbox"
     "-framework CoreServices"
+    "-framework Security"
 )
 
 
