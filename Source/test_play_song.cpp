@@ -7,6 +7,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <string>
+#include <list>
 
 #include "KaniErrors.hpp"
 
@@ -42,7 +43,7 @@ namespace
         
         bool                          running;
         
-        converter_state             * c_state;
+        std::list< converter_state* > songs;
     };
 }
 
@@ -65,10 +66,7 @@ void initConverter(
 void disposeConverter( converter_state& c_state );
 void initPlayer( player_state& p_state );
 void disposePlayer( player_state& p_state );
-void runPlayer(
-    player_state   & p_state,
-    converter_state& c_state
-);
+void runPlayer( player_state& p_state );
 OSStatus KaniCoreAudioConverterComplexInputDataProc(
     AudioConverterRef             converter,
     UInt32                      * packet_count,
@@ -481,10 +479,7 @@ void disposePlayer( player_state& p_state )
 }
 
 
-void runPlayer(
-    player_state   & p_state,
-    converter_state& c_state
-)
+void runPlayer( player_state& p_state )
 {
     OSStatus result;
     
@@ -635,8 +630,24 @@ void KaniCoreAudioQueueCallbackProc(
     OSStatus result;
     static unsigned long buffer_count = 0;
     
-    // if( !( p_state -> running ) )
-    //     return;
+    if( p_state -> songs.size() < 1 )
+    {
+        // DEBUG:
+        std::cout
+            << "player: out of songs, stopping"
+            << std::endl
+        ;
+        
+        result = AudioQueueStop(
+            p_state -> queue,
+            false
+        );
+        KaniHandleOSErrorDebug( result );
+        
+        p_state -> running = false;
+        
+        return;
+    }
     
     UInt32 packets_read = p_state -> packets_to_read;
     
@@ -665,14 +676,14 @@ void KaniCoreAudioQueueCallbackProc(
     ;
     
     result = AudioConverterFillComplexBuffer(
-        p_state -> c_state -> converter,
+        p_state -> songs.front() -> converter,
         KaniCoreAudioConverterComplexInputDataProc,
-        p_state -> c_state,
+        p_state -> songs.front(),
         &packets_read,
         &play_buffers,
         NULL
     );
-    // KaniHandleOSErrorDebug( result );
+    KaniHandleOSErrorDebug( result );
     
     // DEBUG:
     std::cout
@@ -707,19 +718,20 @@ void KaniCoreAudioQueueCallbackProc(
     }
     else
     {
-        result = AudioQueueStop(
-            p_state -> queue,
-            false
-        );
-        KaniHandleOSErrorDebug( result );
-        
-        p_state -> running = false;
-        
         // DEBUG:
         std::cout
-            << "player: no more audio file data to buffer"
+            << "player: no more audio file data to buffer, moving to next song"
             << std::endl
         ;
+        
+        p_state -> songs.pop_front();
+        
+        // TEMPORARY:
+        KaniCoreAudioQueueCallbackProc(
+            user_data,
+            queue,
+            buffer
+        );
     }
 }
 
@@ -732,32 +744,43 @@ int main( int argc, char* argv[] )
         return -1;
     }
     
-    std::string song_file( argv[ 1 ] );
-    
-    std::cout
-        << "playing file "
-        << song_file
-        << std::endl
-    ;
+    int song_count = argc - 1;
     
     /**************************************************************************/
     
-    player_state    p_state{ 0 };
-    converter_state c_state{ 0 };
-    
-    p_state.c_state = &c_state;
+    player_state     p_state { 0 };
+    converter_state* c_states = new converter_state[ song_count ];
     
     initPlayer( p_state );
-    initConverter(
-        c_state,
-        p_state,
-        song_file
-    );
     
-    runPlayer( p_state, c_state );
+    for( int i = 0; i < song_count; ++i )
+    {
+        std::string song_file( argv[ i + 1 ] );
+        
+        // DEBUG:
+        std::cout
+            << "adding file "
+            << song_file
+            << " to player queue"
+            << std::endl
+        ;
+        
+        initConverter(
+            c_states[ i ],
+            p_state,
+            song_file
+        );
+        p_state.songs.push_back( &c_states[ i ] );
+    }
     
-    disposePlayer(    p_state );
-    disposeConverter( c_state );
+    runPlayer( p_state );
+    
+    disposePlayer( p_state );
+    
+    for( int i = 0; i < song_count; ++i )
+        disposeConverter( c_states[ i ] );
+    
+    delete[] c_states;
     
     std::cout
         << "done"
