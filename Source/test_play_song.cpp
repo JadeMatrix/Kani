@@ -14,87 +14,79 @@
 namespace
 {
     static const int kNumberBuffers = 3;
+    static const double buffer_seconds = 0.5f;
+    static const double play_loop_timeout_seconds = 0.25f;
     
-    struct AQPlayerState
+    struct converter_state
     {
-        AudioStreamBasicDescription  mDataFormat;
-        AudioQueueRef                mQueue;
-        AudioQueueBufferRef          mBuffers[ kNumberBuffers ];
-        AudioFileID                  mAudioFile;
-        UInt32                       bufferByteSize;
-        SInt64                       mCurrentPacket;
-        UInt32                       mNumPacketsToRead;
-        AudioStreamPacketDescription *mPacketDescs;
-        bool                         mIsRunning;
+        AudioConverterRef             converter;
+        AudioFileID                   file;
+        AudioStreamBasicDescription   format;
+        AudioStreamPacketDescription* packet_descriptions;
+        AudioBuffer                   buffer;
+        UInt32                        buffer_bytes;
+        
+        UInt32                        packets_to_read;
+        SInt64                        current_packet;
+    };
+    
+    struct player_state
+    {
+        AudioQueueRef                 queue;
+        AudioStreamBasicDescription   format;
+        AudioStreamPacketDescription* packet_descriptions;
+        AudioQueueBufferRef           buffers[ kNumberBuffers ];
+        UInt32                        buffer_bytes;
+        
+        UInt32                        packets_to_read;
+        
+        bool                          running;
+        
+        converter_state             * c_state;
     };
 }
 
 
-void KaniTestMusicPlayCallback(
-    void* pAqData_v,
-    AudioQueueRef inAQ,
-    AudioQueueBufferRef inBuffer
-)
-{
-    AQPlayerState* pAqData = ( AQPlayerState* )pAqData_v;
-    
-    OSStatus result;
-    static unsigned long buffer_count = 0;
-    
-    if( !( pAqData -> mIsRunning ) )
-        return;
-    
-    UInt32 numBytesReadFromFile;
-    UInt32 numPackets = pAqData -> mNumPacketsToRead;
-    
-    result = AudioFileReadPackets(
-    // result = AudioFileReadPacketData(
-        pAqData -> mAudioFile,
-        false,
-        &numBytesReadFromFile,
-        pAqData -> mPacketDescs,
-        pAqData -> mCurrentPacket,
-        &numPackets,
-        inBuffer -> mAudioData
-    );
-    
-    KaniHandleOSErrorDebug( result );
-    
-    if( numPackets > 0 )
-    {
-        inBuffer -> mAudioDataByteSize = numBytesReadFromFile;
-        
-        result = AudioQueueEnqueueBuffer(
-            pAqData -> mQueue,
-            inBuffer,
-            ( pAqData -> mPacketDescs ? numPackets : 0 ),
-            pAqData -> mPacketDescs
-        );
-        KaniHandleOSErrorDebug( result );
-        
-        pAqData -> mCurrentPacket += numPackets;
-        
-        std::cout
-            << "buffered audio file data buffer "
-            << ++buffer_count
-            << std::endl
-        ;
-    }
-    else
-    {
-        result = AudioQueueStop( pAqData -> mQueue, false );
-        KaniHandleOSErrorDebug( result );
-        pAqData -> mIsRunning = false;
-        
-        std::cout
-            << "no more audio file data to buffer"
-            << std::endl
-        ;
-    }
-}
+/******************************************************************************/
 
 
-void DeriveBufferSize (
+void DeriveBufferSize(
+    AudioStreamBasicDescription &ASBDesc,
+    UInt32                      maxPacketSize,
+    Float64                     seconds,
+    UInt32                      *outBufferSize,
+    UInt32                      *outNumPacketsToRead
+);
+void initConverter(
+    converter_state   & c_state,
+    const player_state& p_state,
+    const std::string & filename
+);
+void disposeConverter( converter_state& c_state );
+void initPlayer( player_state& p_state );
+void disposePlayer( player_state& p_state );
+void runPlayer(
+    player_state   & p_state,
+    converter_state& c_state
+);
+OSStatus KaniCoreAudioConverterComplexInputDataProc(
+    AudioConverterRef             converter,
+    UInt32                      * packet_count,
+    AudioBufferList             * buffers,
+    AudioStreamPacketDescription* packet_descriptions,
+    void                        * user_data
+);
+void KaniCoreAudioQueueCallbackProc(
+    void*               user_data,
+    AudioQueueRef       queue,
+    AudioQueueBufferRef buffer
+);
+
+
+/******************************************************************************/
+
+
+void DeriveBufferSize(
     /*
     The AudioStreamBasicDescription structure for the audio queue.
     */
@@ -149,6 +141,7 @@ void DeriveBufferSize (
         packet, derives a reasonable audio queue buffer size based on the
         maximum packet size and the upper bound you’ve set.
         */
+        // TODO: may want to estimate larger
         *outBufferSize =
             maxBufferSize > maxPacketSize ?
                 maxBufferSize : maxPacketSize;
@@ -180,128 +173,149 @@ void DeriveBufferSize (
 }
 
 
-int main( int argc, char* argv[] )
+void initConverter(
+    converter_state   & c_state,
+    const player_state& p_state,
+    const std::string & filename
+)
 {
-    if( argc < 2 )
-    {
-        std::cerr << "missing audio file" << std::endl;
-        return -1;
-    }
-    
-    std::string song_file( argv[ 1 ] );
-    
     OSStatus result;
     
-    AQPlayerState aqData = { 0 };
-    
-    std::cout
-        << "playing file "
-        << song_file
-        << std::endl
-    ;
-    
-    /**************************************************************************/
+    /* Open audio file ********************************************************/
     
     CFURLRef audioFileURL = CFURLCreateFromFileSystemRepresentation(
-        kCFAllocatorDefault, // same as NULL
-        ( UInt8* )song_file.c_str(),
-        song_file.length(),
-        false // not a directory
+        kCFAllocatorDefault, // aka NULL
+        ( UInt8* )filename.c_str(),
+        filename.length(),
+        false // "not a directory"
     );
     
     result = AudioFileOpenURL(
         audioFileURL,
         ( AudioFilePermissions )fsRdPerm,
         0,
-        &aqData.mAudioFile
+        &c_state.file
     );
     KaniHandleOSErrorDebug( result );
      
     CFRelease( audioFileURL );
     
-    UInt32 dataFormatSize = sizeof( aqData.mDataFormat );
+    UInt32 dataFormatSize = sizeof( c_state.format );
     result = AudioFileGetProperty(
-        aqData.mAudioFile,
+        c_state.file,
         kAudioFilePropertyDataFormat,
         &dataFormatSize,
-        &aqData.mDataFormat
+        &c_state.format
     );
     KaniHandleOSErrorDebug( result );
     
+    // DEBUG:
     std::cout
-        << "loaded audio file"
+        << "loaded audio file "
+        << filename
         << std::endl
     ;
     
-    /**************************************************************************/
+    /* Buffers & packet descriptions ******************************************/
     
     UInt32 maxPacketSize;
     UInt32 propertySize = sizeof( maxPacketSize );
+    
     result = AudioFileGetProperty(
-        aqData.mAudioFile,
+        c_state.file,
         kAudioFilePropertyPacketSizeUpperBound,
         &propertySize,
         &maxPacketSize
     );
     KaniHandleOSErrorDebug( result );
     
-    DeriveBufferSize(
-        aqData.mDataFormat,
-        maxPacketSize,
-        0.5,
-        &aqData.bufferByteSize,
-        &aqData.mNumPacketsToRead
-    );
+    // DeriveBufferSize(
+    //     c_state.format,
+    //     maxPacketSize,
+    //     buffer_seconds,
+    //     &c_state.buffer_bytes,
+    //     &c_state.packets_to_read
+    // );
+    c_state.packets_to_read = 1;
+    c_state.buffer_bytes = maxPacketSize * c_state.packets_to_read;
     
-    bool isFormatVBR = (
-           aqData.mDataFormat.mBytesPerPacket  == 0
-        || aqData.mDataFormat.mFramesPerPacket == 0
-    );
+    // DEBUG:
+    std::cout
+        << "want "
+        << c_state.buffer_bytes
+        << " bytes for "
+        << c_state.packets_to_read
+        << " packets ("
+        << ( ( float )c_state.buffer_bytes / ( float )c_state.packets_to_read )
+        << " per)"
+        << std::endl
+    ;
     
-    if( isFormatVBR )
+    if( // Variable Bit Rate (VBR)
+           c_state.format.mBytesPerPacket  == 0
+        || c_state.format.mFramesPerPacket == 0
+    )
     {
-        aqData.mPacketDescs = ( AudioStreamPacketDescription* )malloc(
-            aqData.mNumPacketsToRead * sizeof( AudioStreamPacketDescription )
+        c_state.packet_descriptions = ( AudioStreamPacketDescription* )malloc(
+            c_state.packets_to_read * sizeof( AudioStreamPacketDescription )
         );
     }
     else
     {
-        aqData.mPacketDescs = NULL;
+        c_state.packet_descriptions = NULL;
     }
     
+    c_state.buffer.mData = malloc( c_state.buffer_bytes );
+    c_state.buffer.mNumberChannels = c_state.format.mChannelsPerFrame;
+    
+    c_state.current_packet = 0;
+    
+    // DEBUG:
     std::cout
-        << "got audio file metadata"
+        << "got packet descriptions & allocated buffers for audio file "
+        << filename
         << std::endl
     ;
     
-    /**************************************************************************/
+    /* Magic cookie ***********************************************************/
     
     UInt32 cookieSize = sizeof( UInt32 );
     
     result = AudioFileGetPropertyInfo(
-        aqData.mAudioFile,
+        c_state.file,
         kAudioFilePropertyMagicCookieData,
         &cookieSize,
         NULL
     );
-     
-    if( result == noErr && cookieSize )
+    
+    if( result == noErr && cookieSize > 0 )
     {
         char* magicCookie = ( char* )malloc( cookieSize );
         
         result = AudioFileGetProperty(
-            aqData.mAudioFile,
+            c_state.file,
             kAudioFilePropertyMagicCookieData,
             &cookieSize,
             magicCookie
         );
         KaniHandleOSErrorDebug( result );
-        result = AudioQueueSetProperty(
-            aqData.mQueue,
-            kAudioQueueProperty_MagicCookie,
-            magicCookie,
-            cookieSize
+        
+        // // DEBUG:
+        // std::cout
+        //     << "magic cookie of size "
+        //     << cookieSize
+        //     << ": "
+        //     << std::string( magicCookie, cookieSize )
+        //     << std::endl
+        // ;
+        
+        result = AudioConverterSetProperty(
+            c_state.converter,
+            kAudioConverterDecompressionMagicCookie,
+            cookieSize,
+            magicCookie
         );
+        DEBUG:
         if( result == paramErr )
             std::cout
                 << "Could not set magic cookie on queue, playback may still succeed"
@@ -312,13 +326,79 @@ int main( int argc, char* argv[] )
         
         free( magicCookie );
     }
+    // DEBUG:
+    else
+        std::cout
+            << "got magic cookie for audio file "
+            << filename
+            << std::endl
+        ;
     
+    /* Audio converter initialization *****************************************/
+    
+    result = AudioConverterNew(
+        &c_state.format,
+        &p_state.format,
+        &c_state.converter
+    );
+    KaniHandleOSErrorDebug( result );
+    
+    // DEBUG:
     std::cout
-        << "got audio file cookie"
+        << "created converter for audio file "
+        << filename
         << std::endl
     ;
+}
+
+
+void disposeConverter( converter_state& c_state )
+{
+    OSStatus result;
     
-    /**************************************************************************/
+    result = AudioConverterDispose( c_state.converter );
+    KaniHandleOSErrorDebug( result );
+    
+    free( c_state.buffer.mData );
+    
+    if( c_state.packet_descriptions )
+        free( c_state.packet_descriptions );
+    
+    result = AudioFileClose( c_state.file );
+    KaniHandleOSErrorDebug( result );
+    
+    // DEBUG:
+    std::cout
+        << "cleaned up converter data"
+        << std::endl
+    ;
+}
+
+
+void initPlayer( player_state& p_state )
+{
+    OSStatus result;
+    
+    /* Linear PCM format description ******************************************/
+    
+    p_state.format.mFormatID         = kAudioFormatLinearPCM;
+    p_state.format.mSampleRate       = 44100.0;
+    p_state.format.mChannelsPerFrame = 2;
+    p_state.format.mBitsPerChannel   = 16;
+    p_state.format.mBytesPerPacket   =
+       p_state.format.mBytesPerFrame =
+          p_state.format.mChannelsPerFrame * sizeof( SInt16 );
+    p_state.format.mFramesPerPacket  = 1;
+    
+    AudioFileTypeID fileType = kAudioFileAIFFType;
+    p_state.format.mFormatFlags =
+    (
+          kLinearPCMFormatFlagIsBigEndian
+        | kLinearPCMFormatFlagIsSignedInteger
+        | kLinearPCMFormatFlagIsPacked
+    );
+    
+    /* Create queue ***********************************************************/
     
     // result = AudioQueueNewOutput(
     //     &aqData.mDataFormat, // const AudioStreamBasicDescription *inFormat,
@@ -329,112 +409,360 @@ int main( int argc, char* argv[] )
     //     0, // UInt32 inFlags,
     //     &aqData.mQueue // AudioQueueRef  _Nullable *outAQ
     // );
-    result = AudioQueueNewOutput (
-        &aqData.mDataFormat,
-        KaniTestMusicPlayCallback,
-        &aqData,
+    result = AudioQueueNewOutput(
+        &p_state.format,
+        KaniCoreAudioQueueCallbackProc,
+        &p_state,
         CFRunLoopGetCurrent(),
         kCFRunLoopCommonModes,
         0,
-        &aqData.mQueue
+        &p_state.queue
     );
-    
     KaniHandleOSErrorDebug( result );
     
-    aqData.mCurrentPacket = 0;
+    Float32 gain = 1.0; // Optionally, allow user to override gain setting here
     
-    aqData.mIsRunning = true;
+    result = AudioQueueSetParameter(
+        p_state.queue,
+        kAudioQueueParam_Volume,
+        gain
+    );
+    KaniHandleOSErrorDebug( result );
+    
+    // DEBUG:
+    std::cout
+        << "created player queue & set parameters"
+        << std::endl
+    ;
+    
+    /* Queue buffers **********************************************************/
+    
+    DeriveBufferSize(
+        p_state.format,
+        p_state.format.mBytesPerPacket /* maxPacketSize */,
+        buffer_seconds,
+        &p_state.buffer_bytes,
+        &p_state.packets_to_read
+    );
     
     for( int i = 0; i < kNumberBuffers; ++i )
     {
+        result = AudioQueueAllocateBuffer(
+            p_state.queue,
+            p_state.buffer_bytes,
+            &p_state.buffers[ i ]
+        );
+        KaniHandleOSErrorDebug( result );
+    }
+    
+    // DEBUG:
+    std::cout
+        << "created player queue buffers"
+        << std::endl
+    ;
+}
+
+
+void disposePlayer( player_state& p_state )
+{
+    OSStatus result;
+    
+    result = AudioQueueDispose(
+        p_state.queue,
+        true
+    );
+    KaniHandleOSErrorDebug( result );
+    
+    // DEBUG:
+    std::cout
+        << "cleaned up player data"
+        << std::endl
+    ;
+}
+
+
+void runPlayer(
+    player_state   & p_state,
+    converter_state& c_state
+)
+{
+    OSStatus result;
+    
+    p_state.running = true;
+    
+    result = AudioQueueStart(
+        p_state.queue,
+        NULL
+    );
+    KaniHandleOSErrorDebug( result );
+    
+    for( int i = 0; i < kNumberBuffers; ++i )
+    {
+        // DEBUG:
         std::cout
             << "prepping buffer "
             << i
             << std::endl
         ;
         
-        result = AudioQueueAllocateBuffer(
-            aqData.mQueue,
-            aqData.bufferByteSize,
-            &aqData.mBuffers[ i ]
-        );
-        KaniHandleOSErrorDebug( result );
-        
-        KaniTestMusicPlayCallback(
-            &aqData,
-            aqData.mQueue,
-            aqData.mBuffers[ i ]
+        KaniCoreAudioQueueCallbackProc(
+            &p_state,
+            p_state.queue,
+            p_state.buffers[ i ]
         );
     }
     
-    Float32 gain = 1.0; // Optionally, allow user to override gain setting here
-    
-    result = AudioQueueSetParameter(
-        aqData.mQueue,
-        kAudioQueueParam_Volume,
-        gain
-    );
-    KaniHandleOSErrorDebug( result );
-    
-    std::cout
-        << "created queue & set parameters"
-        << std::endl
-    ;
-    
-    /**************************************************************************/
-    
-    // aqData.mIsRunning = true;
-     
-    result = AudioQueueStart(
-        aqData.mQueue,
-        NULL
-    );
-    KaniHandleOSErrorDebug( result );
-    
+    // DEBUG:
     std::cout
         << "running queue..."
         << std::endl
     ;
     
-    do {
-        // returns https://developer.apple.com/documentation/corefoundation/cfrunlooprunresult?language=objc
+    // NOTE: CFRunLoopRunInMode() returns
+    // https://developer.apple.com/documentation/corefoundation/cfrunlooprunresult?language=objc
+    
+    do
+    {
         CFRunLoopRunInMode(
             kCFRunLoopDefaultMode,
-            0.25,
+            play_loop_timeout_seconds,
             false
         );
-    } while( aqData.mIsRunning );
+        // DEBUG:
+        std::cout
+            << "loop"
+            << std::endl
+        ;
+    } while( p_state.running );
     
     CFRunLoopRunInMode(
         kCFRunLoopDefaultMode,
-        1,
+        1.0f,
         false
     );
     
+    // DEBUG:
     std::cout
         << "ran queue"
+        << std::endl
+    ;
+}
+
+
+OSStatus KaniCoreAudioConverterComplexInputDataProc(
+    AudioConverterRef              converter,
+    UInt32                       * packet_count,
+    AudioBufferList              * buffers,
+    AudioStreamPacketDescription** packet_descriptions,
+    void                         * user_data
+)
+{
+    // DEBUG:
+    std::cout
+        << "KaniCoreAudioConverterComplexInputDataProc()"
+        << std::endl
+    ;
+    
+    converter_state* c_state = ( converter_state* )user_data;
+    OSStatus result;
+    
+    UInt32 bytes_read;
+    
+    // TODO: Reallocate as needed in case player wants larger buffers?
+    *packet_count = (
+        *packet_count < c_state -> packets_to_read ?
+        *packet_count : c_state -> packets_to_read
+    );
+    
+    buffers -> mNumberBuffers = 1;
+    buffers -> mBuffers[ 0 ].mData = malloc( c_state -> buffer_bytes );
+    buffers -> mBuffers[ 0 ].mDataByteSize   = c_state -> buffer_bytes;
+    buffers -> mBuffers[ 0 ].mNumberChannels = c_state -> format.mChannelsPerFrame;
+    
+    result = AudioFileReadPackets(
+    // result = AudioFileReadPacketData(
+        c_state -> file,
+        false,
+        &bytes_read,
+        c_state -> packet_descriptions,
+        c_state -> current_packet,
+        packet_count,
+        buffers -> mBuffers[ 0 ].mData
+    );
+    KaniHandleOSErrorDebug( result );
+    
+    // DEBUG:
+    std::cout
+        << "converter: read "
+        << bytes_read
+        << " bytes ("
+        << *packet_count
+        << " packets) from file"
+        << std::endl
+    ;
+    
+    if( packet_descriptions )
+    {
+        for( int i = 0; i < *packet_count; ++i )
+            packet_descriptions[ i ] = &( c_state -> packet_descriptions[ i ] );
+        
+        // DEBUG:
+        std::cout
+            << "converter: relayed packet descriptions"
+            << std::endl
+        ;
+    }
+    
+    c_state -> current_packet += *packet_count;
+    
+    return noErr;
+}
+
+
+void KaniCoreAudioQueueCallbackProc(
+    void*               user_data,
+    AudioQueueRef       queue,
+    AudioQueueBufferRef buffer
+)
+{
+    // DEBUG:
+    std::cout
+        << "KaniCoreAudioQueueCallbackProc()"
+        << std::endl
+    ;
+    
+    player_state* p_state = ( player_state* )user_data;
+    OSStatus result;
+    static unsigned long buffer_count = 0;
+    
+    // if( !( p_state -> running ) )
+    //     return;
+    
+    UInt32 packets_read = p_state -> packets_to_read;
+    
+    // AudioBufferList play_buffers{
+    //     {
+    //         buffer -> mAudioData,
+    //         buffer -> mAudioDataBytesCapacity,
+    //         p_state -> format.mChannelsPerFrame
+    //     },
+    //     1
+    // };
+    AudioBufferList play_buffers;
+        // DEBUG:
+        std::cout << "play_buffers has " << ( sizeof( play_buffers.mBuffers ) / sizeof( AudioBuffer ) ) << " buffers" << std::endl;
+    play_buffers.mNumberBuffers = 1;
+    play_buffers.mBuffers[ 0 ].mData           = buffer  -> mAudioData;
+    play_buffers.mBuffers[ 0 ].mDataByteSize   = buffer  -> mAudioDataBytesCapacity;
+    play_buffers.mBuffers[ 0 ].mNumberChannels = p_state -> format.mChannelsPerFrame;
+    
+    // DEBUG:
+    std::cout
+        << "player: reading "
+        << packets_read
+        << " packets"
+        << std::endl
+    ;
+    
+    result = AudioConverterFillComplexBuffer(
+        p_state -> c_state -> converter,
+        KaniCoreAudioConverterComplexInputDataProc,
+        p_state -> c_state,
+        &packets_read,
+        &play_buffers,
+        NULL
+    );
+    // KaniHandleOSErrorDebug( result );
+    
+    // DEBUG:
+    std::cout
+        << "player: read "
+        << packets_read
+        << " packets"
+        << std::endl
+    ;
+    
+    if( packets_read > 0 )
+    {
+        buffer -> mAudioDataByteSize = (
+            packets_read * ( p_state -> format.mBytesPerPacket )
+        );
+        
+        result = AudioQueueEnqueueBuffer(
+            p_state -> queue,
+            buffer,
+            ( p_state -> packet_descriptions ? packets_read : 0 ),
+            p_state -> packet_descriptions
+        );
+        KaniHandleOSErrorDebug( result );
+        
+        // pAqData -> mCurrentPacket += numPackets;
+        
+        // DEBUG:
+        std::cout
+            << "player: buffered audio file data buffer "
+            << ++buffer_count
+            << std::endl
+        ;
+    }
+    else
+    {
+        result = AudioQueueStop(
+            p_state -> queue,
+            false
+        );
+        KaniHandleOSErrorDebug( result );
+        
+        p_state -> running = false;
+        
+        // DEBUG:
+        std::cout
+            << "player: no more audio file data to buffer"
+            << std::endl
+        ;
+    }
+}
+
+
+int main( int argc, char* argv[] )
+{
+    if( argc < 2 )
+    {
+        std::cerr << "missing audio file" << std::endl;
+        return -1;
+    }
+    
+    std::string song_file( argv[ 1 ] );
+    
+    std::cout
+        << "playing file "
+        << song_file
         << std::endl
     ;
     
     /**************************************************************************/
     
-    result = AudioQueueDispose(
-        aqData.mQueue,
-        true
+    player_state    p_state{ 0 };
+    converter_state c_state{ 0 };
+    
+    p_state.c_state = &c_state;
+    
+    initPlayer( p_state );
+    initConverter(
+        c_state,
+        p_state,
+        song_file
     );
-    KaniHandleOSErrorDebug( result );
     
-    result = AudioFileClose( aqData.mAudioFile );
-    KaniHandleOSErrorDebug( result );
+    runPlayer( p_state, c_state );
     
-    free( aqData.mPacketDescs );
+    disposePlayer(    p_state );
+    disposeConverter( c_state );
     
     std::cout
         << "done"
         << std::endl
     ;
-    
-    /**************************************************************************/
     
     return 0;
 }
