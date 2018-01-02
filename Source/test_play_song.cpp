@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <string>
 #include <list>
+#include <cmath>
 
 #include "KaniErrors.hpp"
 
@@ -26,6 +27,7 @@ namespace
         AudioStreamPacketDescription* packet_descriptions;
         AudioBuffer                   buffer;
         UInt32                        buffer_bytes;
+        Float64                       duration_seconds;
         
         UInt32                        packets_to_read;
         SInt64                        current_packet;
@@ -207,10 +209,24 @@ void initConverter(
     );
     KaniHandleOSErrorDebug( result );
     
+    dataFormatSize = sizeof( c_state.duration_seconds );
+    result = AudioFileGetProperty(
+        c_state.file,
+        kAudioFilePropertyEstimatedDuration,
+        &dataFormatSize,
+        &c_state.duration_seconds
+    );
+    KaniHandleOSErrorDebug( result );
+    
     // DEBUG:
     std::cout
         << "loaded audio file "
         << filename
+        << " (approx. duration: "
+        << ( long )( c_state.duration_seconds / 60 )
+        << ":"
+        << fmod( c_state.duration_seconds, 60 )
+        << ")"
         << std::endl
     ;
     
@@ -327,7 +343,7 @@ void initConverter(
     // DEBUG:
     else
         std::cout
-            << "got magic cookie for audio file "
+            << "no magic cookie for audio file "
             << filename
             << std::endl
         ;
@@ -382,17 +398,17 @@ void initPlayer( player_state& p_state )
     p_state.format.mFormatID         = kAudioFormatLinearPCM;
     p_state.format.mSampleRate       = 44100.0;
     p_state.format.mChannelsPerFrame = 2;
-    p_state.format.mBitsPerChannel   = 16;
+    p_state.format.mBitsPerChannel   = 8 * sizeof( Float32 );
     p_state.format.mBytesPerPacket   =
        p_state.format.mBytesPerFrame =
-          p_state.format.mChannelsPerFrame * sizeof( SInt16 );
+          p_state.format.mChannelsPerFrame * sizeof( Float32 );
     p_state.format.mFramesPerPacket  = 1;
     
     AudioFileTypeID fileType = kAudioFileAIFFType;
     p_state.format.mFormatFlags =
     (
-          kLinearPCMFormatFlagIsBigEndian
-        | kLinearPCMFormatFlagIsSignedInteger
+          /*kLinearPCMFormatFlagIsBigEndian
+        |*/ /*kLinearPCMFormatFlagIsSignedInteger*/ kLinearPCMFormatFlagIsFloat
         | kLinearPCMFormatFlagIsPacked
     );
     
@@ -552,11 +568,11 @@ OSStatus KaniCoreAudioConverterComplexInputDataProc(
     void                         * user_data
 )
 {
-    // DEBUG:
-    std::cout
-        << "KaniCoreAudioConverterComplexInputDataProc()"
-        << std::endl
-    ;
+    // // DEBUG:
+    // std::cout
+    //     << "KaniCoreAudioConverterComplexInputDataProc()"
+    //     << std::endl
+    // ;
     
     converter_state* c_state = ( converter_state* )user_data;
     OSStatus result;
@@ -586,26 +602,26 @@ OSStatus KaniCoreAudioConverterComplexInputDataProc(
     );
     KaniHandleOSErrorDebug( result );
     
-    // DEBUG:
-    std::cout
-        << "converter: read "
-        << bytes_read
-        << " bytes ("
-        << *packet_count
-        << " packets) from file"
-        << std::endl
-    ;
+    // // DEBUG:
+    // std::cout
+    //     << "converter: read "
+    //     << bytes_read
+    //     << " bytes ("
+    //     << *packet_count
+    //     << " packets) from file"
+    //     << std::endl
+    // ;
     
     if( packet_descriptions )
     {
         for( int i = 0; i < *packet_count; ++i )
             packet_descriptions[ i ] = &( c_state -> packet_descriptions[ i ] );
         
-        // DEBUG:
-        std::cout
-            << "converter: relayed packet descriptions"
-            << std::endl
-        ;
+        // // DEBUG:
+        // std::cout
+        //     << "converter: relayed packet descriptions"
+        //     << std::endl
+        // ;
     }
     
     c_state -> current_packet += *packet_count;
@@ -620,11 +636,11 @@ void KaniCoreAudioQueueCallbackProc(
     AudioQueueBufferRef buffer
 )
 {
-    // DEBUG:
-    std::cout
-        << "KaniCoreAudioQueueCallbackProc()"
-        << std::endl
-    ;
+    // // DEBUG:
+    // std::cout
+    //     << "KaniCoreAudioQueueCallbackProc()"
+    //     << std::endl
+    // ;
     
     player_state* p_state = ( player_state* )user_data;
     OSStatus result;
@@ -660,20 +676,18 @@ void KaniCoreAudioQueueCallbackProc(
     //     1
     // };
     AudioBufferList play_buffers;
-        // DEBUG:
-        std::cout << "play_buffers has " << ( sizeof( play_buffers.mBuffers ) / sizeof( AudioBuffer ) ) << " buffers" << std::endl;
     play_buffers.mNumberBuffers = 1;
     play_buffers.mBuffers[ 0 ].mData           = buffer  -> mAudioData;
     play_buffers.mBuffers[ 0 ].mDataByteSize   = buffer  -> mAudioDataBytesCapacity;
     play_buffers.mBuffers[ 0 ].mNumberChannels = p_state -> format.mChannelsPerFrame;
     
-    // DEBUG:
-    std::cout
-        << "player: reading "
-        << packets_read
-        << " packets"
-        << std::endl
-    ;
+    // // DEBUG:
+    // std::cout
+    //     << "player: reading "
+    //     << packets_read
+    //     << " packets"
+    //     << std::endl
+    // ;
     
     result = AudioConverterFillComplexBuffer(
         p_state -> songs.front() -> converter,
@@ -685,19 +699,25 @@ void KaniCoreAudioQueueCallbackProc(
     );
     KaniHandleOSErrorDebug( result );
     
-    // DEBUG:
-    std::cout
-        << "player: read "
-        << packets_read
-        << " packets"
-        << std::endl
-    ;
+    // // DEBUG:
+    // std::cout
+    //     << "player: read "
+    //     << packets_read
+    //     << " packets"
+    //     << std::endl
+    // ;
     
     if( packets_read > 0 )
     {
         buffer -> mAudioDataByteSize = (
             packets_read * ( p_state -> format.mBytesPerPacket )
         );
+        
+        // // DOWNSAMPLE:
+        // for( int i = 0; i < packets_read * 2; ++i )
+        //     ( ( Float32* )( buffer -> mAudioData ) )[ i ] = (
+        //         ( ( Float32* )( buffer -> mAudioData ) )[ i ] / 256
+        //     ) * 256;
         
         result = AudioQueueEnqueueBuffer(
             p_state -> queue,
@@ -706,8 +726,6 @@ void KaniCoreAudioQueueCallbackProc(
             p_state -> packet_descriptions
         );
         KaniHandleOSErrorDebug( result );
-        
-        // pAqData -> mCurrentPacket += numPackets;
         
         // DEBUG:
         std::cout
