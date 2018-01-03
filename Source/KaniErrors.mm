@@ -1,6 +1,7 @@
 #include "KaniErrors.hpp"
 
 #include <AudioToolbox/AudioToolbox.h>
+#include <AudioToolbox/AudioConverter.h>
 
 #include <iostream>
 
@@ -100,7 +101,7 @@ void KaniHandleOSErrorDebugLine( OSStatus e, std::string location )
         errcode_string = "kAudioQueueErr_InvalidOfflineMode";
         errdesc_string = "The operation requires the audio queue to be in offline mode but it isn’t, or vice versa.";
         break;
-    // case kAudioFormatUnsupportedDataFormatError: See below
+    // case kAudioFormatUnsupportedDataFormatError: See kAudioFileUnsupportedDataFormatError below
     
     /*
         Audio File Services Errors
@@ -116,15 +117,15 @@ void KaniHandleOSErrorDebugLine( OSStatus e, std::string location )
         errdesc_string = "The file type is not supported.";
         break;
     case kAudioFileUnsupportedDataFormatError:
-        errcode_string = "kAudioFileUnsupportedDataFormatError";
-        errdesc_string = "The data format is not supported by this file type.";
+        errcode_string = "kAudioFileUnsupportedDataFormatError or kAudioConverterErr_FormatNotSupported";
+        errdesc_string = "The (playback) data format is unsupported / not supported by this file type.";
         break;
     case kAudioFileUnsupportedPropertyError:
         errcode_string = "kAudioFileUnsupportedPropertyError";
         errdesc_string = "The property is not supported.";
         break;
     case kAudioFileBadPropertySizeError:
-        errcode_string = "kAudioFileBadPropertySizeError";
+        errcode_string = "kAudioFileBadPropertySizeError or kAudioConverterErr_BadPropertySizeError";
         errdesc_string = "The size of the property data was not correct.";
         break;
     case kAudioFilePermissionsError:
@@ -152,7 +153,7 @@ void KaniHandleOSErrorDebugLine( OSStatus e, std::string location )
         errdesc_string = "The file is malformed, or otherwise not a valid instance of an audio file of its type.";
         break;
     case kAudioFileOperationNotSupportedError:
-        errcode_string = "kAudioFileOperationNotSupportedError";
+        errcode_string = "kAudioFileOperationNotSupportedError or kAudioConverterErr_OperationNotSupported";
         errdesc_string = "The operation cannot be performed. For example, setting the `kAudioFilePropertyAudioDataByteCount` constant to increase the size of the audio data in a file is not a supported operation. Write the data instead.";
         break;
     case kAudioFileNotOpenError:
@@ -171,6 +172,55 @@ void KaniHandleOSErrorDebugLine( OSStatus e, std::string location )
         errcode_string = "kAudioFileFileNotFoundError";
         errdesc_string = "File not found.";
         break;
+    
+    /*
+        Audio Converter Services Errors
+        https://developer.apple.com/documentation/audiotoolbox/audio_converter_services?language=objc
+    */
+    
+    // case kAudioConverterErr_FormatNotSupported:
+    //     errcode_string = "kAudioConverterErr_FormatNotSupported";
+    //     break;
+    // case kAudioConverterErr_OperationNotSupported:
+    //     errcode_string = "kAudioConverterErr_OperationNotSupported";
+    //     break;
+    case kAudioConverterErr_PropertyNotSupported:
+        errcode_string = "kAudioConverterErr_PropertyNotSupported";
+        break;
+    case kAudioConverterErr_InvalidInputSize:
+        errcode_string = "kAudioConverterErr_InvalidInputSize";
+        break;
+    case kAudioConverterErr_InvalidOutputSize:
+        errcode_string = "kAudioConverterErr_InvalidOutputSize";
+        errdesc_string = "The byte size is not an integer multiple of the frame size.";
+        break;
+    case kAudioConverterErr_UnspecifiedError:
+        errcode_string = "kAudioConverterErr_UnspecifiedError";
+        break;
+    // case kAudioConverterErr_BadPropertySizeError:
+    //     errcode_string = "kAudioConverterErr_BadPropertySizeError";
+    //     break;
+    case kAudioConverterErr_RequiresPacketDescriptionsError:
+        errcode_string = "kAudioConverterErr_RequiresPacketDescriptionsError";
+        break;
+    case kAudioConverterErr_InputSampleRateOutOfRange:
+        errcode_string = "kAudioConverterErr_InputSampleRateOutOfRange";
+        break;
+    case kAudioConverterErr_OutputSampleRateOutOfRange:
+        errcode_string = "kAudioConverterErr_OutputSampleRateOutOfRange";
+        break;
+    // Unavailable on macOS (iOS & tvOS only):
+    // https://developer.apple.com/documentation/audiotoolbox/1624334-anonymous/kaudioconvertererr_hardwareinuse?language=objc
+    // case kAudioConverterErr_HardwareInUse:
+    //     errcode_string = "kAudioConverterErr_HardwareInUse";
+    //     errdesc_string = "Returned from the `AudioConverterFillComplexBuffer` function if the underlying hardware codec has become unavailable, probably due to an audio interruption.";
+    //     break;
+    // Unavailable on macOS (iOS & tvOS only):
+    // https://developer.apple.com/documentation/audiotoolbox/1624334-anonymous/kaudioconvertererr_nohardwarepermission?language=objc
+    // case kAudioConverterErr_NoHardwarePermission:
+    //     errcode_string = "kAudioConverterErr_NoHardwarePermission";
+    //     errdesc_string = "Returned from the `AudioConverterNew` function if the new converter would use a hardware codec which the application does not have permission to use.";
+    //     break;
     }
     
 #pragma clang diagnostic push
