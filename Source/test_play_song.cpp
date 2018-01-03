@@ -291,6 +291,22 @@ void initConverter(
         << std::endl
     ;
     
+    /* Audio converter initialization *****************************************/
+    
+    result = AudioConverterNew(
+        &c_state.format,
+        &p_state.format,
+        &c_state.converter
+    );
+    KaniHandleOSErrorDebug( result );
+    
+    // DEBUG:
+    std::cout
+        << "created converter for audio file "
+        << filename
+        << std::endl
+    ;
+    
     /* Magic cookie ***********************************************************/
     
     UInt32 cookieSize = sizeof( UInt32 );
@@ -329,7 +345,7 @@ void initConverter(
             cookieSize,
             magicCookie
         );
-        DEBUG:
+        // DEBUG:
         if( result == paramErr )
             std::cout
                 << "Could not set magic cookie on queue, playback may still succeed"
@@ -339,6 +355,13 @@ void initConverter(
             KaniHandleOSErrorDebug( result );
         
         free( magicCookie );
+        
+        // DEBUG:
+        std::cout
+            << "set magic cookie on converter for audio file "
+            << filename
+            << std::endl
+        ;
     }
     // DEBUG:
     else
@@ -347,22 +370,6 @@ void initConverter(
             << filename
             << std::endl
         ;
-    
-    /* Audio converter initialization *****************************************/
-    
-    result = AudioConverterNew(
-        &c_state.format,
-        &p_state.format,
-        &c_state.converter
-    );
-    KaniHandleOSErrorDebug( result );
-    
-    // DEBUG:
-    std::cout
-        << "created converter for audio file "
-        << filename
-        << std::endl
-    ;
 }
 
 
